@@ -231,9 +231,10 @@ struct MentalHealthApp: App {
         #endif
 
         guard let url = URL(string: baseURL) else {
-            await updateReplyOnMain("URLが無効にゃ")
+            updateReplyOnMain("URLが無効にゃ")
             return
         }
+
 
         let body: [String: Any] = ["prompt": fullPrompt]
         let data = try? JSONSerialization.data(withJSONObject: body)
@@ -248,7 +249,7 @@ struct MentalHealthApp: App {
             if let (responseData, _) = try? await URLSession.shared.data(for: request),
                let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
                let reply = json["reply"] as? String {
-                await updateReplyOnMain(reply)
+                updateReplyOnMain(reply)
                 success = true
                 break
             }
@@ -256,7 +257,7 @@ struct MentalHealthApp: App {
         }
 
         if !success {
-            await updateReplyOnMain("サーバに接続できないにゃ")
+ updateReplyOnMain("サーバに接続できないにゃ")
         }
     }
 

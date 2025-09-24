@@ -8,31 +8,55 @@ import UIKit
 
 // MARK: - ユーザー情報
 class UserInfo: ObservableObject {
-    @Published var catCallName: String = ""   // 猫に呼んでほしい名前
-    @Published var catRealName: String = ""   // 猫の名前
-    @Published var gender: String = ""
-    @Published var age: String = ""
-    @Published var address: String = ""
-    @Published var height: String = ""
-    @Published var weight: String = ""
-    @Published var alcohol: String = ""
-    @Published var tobacco: String = ""
+    @Published var catCallName: String = "" {   // 猫に呼んでほしい名前
+        didSet { UserDefaults.standard.set(catCallName, forKey: "catCallName") }
+    }
+    @Published var catRealName: String = "" {   // 猫の名前
+        didSet { UserDefaults.standard.set(catRealName, forKey: "catRealName") }
+    }
+    @Published var gender: String = "" {
+        didSet { UserDefaults.standard.set(gender, forKey: "gender") }
+    }
+    @Published var age: String = "" {
+        didSet { UserDefaults.standard.set(age, forKey: "age") }
+    }
+    @Published var address: String = "" {
+        didSet { UserDefaults.standard.set(address, forKey: "address") }
+    }
+    @Published var height: String = "" {
+        didSet { UserDefaults.standard.set(height, forKey: "height") }
+    }
+    @Published var weight: String = "" {
+        didSet { UserDefaults.standard.set(weight, forKey: "weight") }
+    }
+    @Published var alcohol: String = "" {
+        didSet { UserDefaults.standard.set(alcohol, forKey: "alcohol") }
+    }
+    @Published var tobacco: String = "" {
+        didSet { UserDefaults.standard.set(tobacco, forKey: "tobacco") }
+    }
 
-    // チュールの所持数
+    // チュールの所持数（変更なし）
     @Published var churuCount: Int = 0 {
         didSet {
-            // 所持数が変わったら自動で UserDefaults に保存
             UserDefaults.standard.set(churuCount, forKey: "churuCount")
         }
     }
 
     init() {
-        // 初回起動または UserDefaults に保存されている値を読み込む
-        if let savedCount = UserDefaults.standard.object(forKey: "churuCount") as? Int {
-            churuCount = savedCount
-        } else {
-            churuCount = 7 // 初回トライアル付与
-        }
+        // ユーザー情報の永続化読み込み
+        catCallName = UserDefaults.standard.string(forKey: "catCallName") ?? ""
+        catRealName = UserDefaults.standard.string(forKey: "catRealName") ?? ""
+        gender = UserDefaults.standard.string(forKey: "gender") ?? ""
+        age = UserDefaults.standard.string(forKey: "age") ?? ""
+        address = UserDefaults.standard.string(forKey: "address") ?? ""
+        height = UserDefaults.standard.string(forKey: "height") ?? ""
+        weight = UserDefaults.standard.string(forKey: "weight") ?? ""
+        alcohol = UserDefaults.standard.string(forKey: "alcohol") ?? ""
+        tobacco = UserDefaults.standard.string(forKey: "tobacco") ?? ""
+
+        // チュールは従来どおり
+        churuCount = UserDefaults.standard.object(forKey: "churuCount") as? Int ?? 7
     }
 
     // チュールを追加
@@ -618,6 +642,8 @@ struct ContentView: View {
     @State private var isInputVisible: Bool = false
     @State private var photos: [PhotoListView.PhotoItem] = []
     @State private var aiReply: String = ""  // ここに追加
+    // 選んだだけの画像を保持（保存はまだ）
+    @State private var pendingImage: UIImage?
     // --- AI 関連 ---
     @State private var aiInput: String = ""    // ユーザー入力用
     @State private var isThinking: Bool = false // AI 返答中フラグ
@@ -679,13 +705,19 @@ struct ContentView: View {
                       selection: $pickerItem,
                       matching: .images)
         .onChange(of: pickerItem, initial: false) { _, newItem in
-            handlePickerItemChange(newItem, bubbleText: aiReply) // ラベルを 'bubbleText' に変更
+            handlePickerItemChange(newItem)
         }
 
+        // ここに追加
+        .onChange(of: aiReply) { newValue in
+            guard !newValue.isEmpty, let item = pickerItem else { return }
+            handlePickerItemChange(item)
+        }
 
         .onAppear {
             handleOnAppear()
         }
+
     }
     // --- 通常 UI ---
     private var normalUI: some View {
@@ -765,7 +797,7 @@ struct ContentView: View {
 
             // 上部固定メッセージ
             VStack {
-                Text("チューるくれたら応援してやるにゃ。\n三行で悩みを言えにゃ。\n一日一個までにしろにゃ。")
+                Text("チューるくれたら診断してやるにゃ。\n三行で悩みを言えにゃ。\n一日一個までにしろにゃ。")
                     .font(.caption)
                     .foregroundColor(.white)
                     .padding(12)
@@ -883,9 +915,11 @@ struct ContentView: View {
                                         submittedMessages.remove(at: lastIndex)
                                     }
                                     submittedMessages.append("ai:\(aiText)")
+                                    aiReply = aiText   // ← ★ここを追加
                                     isThinking = false
                                 }
                             }
+
                         }) {
                             Text("送信")
                                 .bold()
@@ -1114,30 +1148,31 @@ struct ContentView: View {
                                         to: nil, from: nil, for: nil)
     }
 
-    private func handlePickerItemChange(_ newItem: PhotosPickerItem?, bubbleText: String) {
+    // MARK: - PickerItemChange ハンドラ（修正版）
+    private func handlePickerItemChange(_ newItem: PhotosPickerItem?) {
         guard let newItem = newItem else { return }
+        print("DEBUG: handlePickerItemChange called, aiReply = \(aiReply)")
+
         Task {
             if let data = try? await newItem.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data) {
 
-                // ① 日付を載せる
                 let datedImage = addDateToImage(uiImage)
+                let finalImage = drawTextOnImage(datedImage, text: aiReply)
 
-                // ② AIの返信（吹き出しに表示されている文章）を使う
-                let replyText = bubbleText.isEmpty ? "応答なし" : bubbleText
-
-                // ③ AI返信を載せた画像を生成
-                let finalImage = drawTextOnImage(datedImage, text: replyText)
-
-                // ④ 保存と反映
                 selectedImage = finalImage
-                savedImages.append(finalImage)
 
-                photos = savedImages.map { image in
-                    PhotoListView.PhotoItem(image: image, selectedDate: Date())
+                // 同じ画像が photos にある場合は追加しない
+                if !photos.contains(where: { $0.image.pngData() == finalImage.pngData() }) {
+                    photos.append(
+                        PhotoListView.PhotoItem(
+                            image: finalImage,
+                            selectedDate: Date(),
+                            userText: userInput
+                        )
+                    )
                 }
 
-                // 壁紙・アイコン生成はオリジナルでOK
                 await generateWallpaperAndIconFaceCenter(
                     from: uiImage,
                     wallpaperBinding: $wallpaperImage,
@@ -1154,6 +1189,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private func handleOnAppear() {
         let today = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
@@ -1445,7 +1481,7 @@ struct ContentView: View {
                     }
                     .listStyle(PlainListStyle()) // ← ここを追加して余計な背景を消す
                 }
-                .navigationTitle("写真一覧")
+                .navigationTitle("診断結果")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {

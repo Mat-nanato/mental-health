@@ -22,54 +22,156 @@ class LanguageManager: ObservableObject {
 }
 // MARK: - 追加購入
 struct PurchaseChuruView: View {
-    @EnvironmentObject var userInfo: UserInfo   // ← 追加
+    @EnvironmentObject var userInfo: UserInfo
     @State private var quantity: Int = 1
     let pricePerUnit = 100
     
-    @State private var showAlert = false // アラート表示フラグ
+    @State private var showAlert = false
+    @State private var purchaseAIMessage = "にゃん診断中…"
 
-    
     var totalPrice: Int {
         quantity * pricePerUnit
     }
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("チューるを購入")
-                .font(.title)
-                .bold()
+        ZStack {
+            LinearGradient(
+                colors: [Color.pink.opacity(0.3),
+                         Color.yellow.opacity(0.3),
+                         Color.blue.opacity(0.3)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
-            Stepper("個数: \(quantity)", value: $quantity, in: 1...99)
-                .padding()
-            
-            Text("合計金額: \(totalPrice)円")
-                .font(.headline)
-            
-            Button(action: {
-                // 非同期購入処理がある場合は Task { await ... } 内で行う
-                userInfo.churuCount += quantity  // ← 所持チュール数を増やす
-                showAlert = true
-            }) {
-                Text("購入する")
-                    .foregroundColor(.white)
+            VStack(spacing: 20) {
+                Text("チューるを購入")
+                    .font(.title)
+                    .bold()
+                
+                Stepper("個数: \(quantity)", value: $quantity, in: 1...99)
                     .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue)
+                
+                Text("合計金額: \(totalPrice)円")
+                    .font(.headline)
+                
+                // AI応援メッセージ
+                Text(purchaseAIMessage)
+                    .font(.body)
+                    .foregroundColor(.blue)
+                    .padding(8)
+                    .background(Color.white.opacity(0.7))
                     .cornerRadius(12)
-            }
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                Button(action: {
+                    // チュールを増やす
+                    userInfo.churuCount += quantity
+                    showAlert = true
+                    
+                    // 購入ボタン押したタイミングで AI メッセージ取得
+                    Task {
+                        let prompt = """
+                        あなたは猫キャラクターです。ユーザーがチュールを購入しました。
+                        ユーザー情報:
+                        呼ばれたい名前: \(userInfo.catCallName)
+                                                猫の名前: \(userInfo.catRealName)
+                                                性別: \(userInfo.gender)
+                                                年齢: \(userInfo.age)
+                                                身長: \(userInfo.height)
+                                                体重: \(userInfo.weight)
+                                                住所: \(userInfo.address)
+                                                アルコール: \(userInfo.alcohol)
+                                                タバコ: \(userInfo.tobacco)
+                        
+                        これらを踏まえて、短く可愛く、元気づける応援メッセージを出してください。
+                        """
+                        purchaseAIMessage = await fetchAIReplyText(for: prompt)
+                    }
 
-            .padding(.horizontal)
-            .alert("購入完了", isPresented: $showAlert, actions: {
-                Button("OK", role: .cancel) { }
-            }, message: {
-                Text("\(quantity)個のチュールいつもありがとにゃ。合計 \(totalPrice)円にゃ。")
-            })
-            
-            Spacer()
+                    
+                }) {
+                    Text("購入する")
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.blue)
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal)
+                .alert("購入完了", isPresented: $showAlert, actions: {
+                    Button("OK", role: .cancel) { }
+                }, message: {
+                    Text("\(quantity)個のチュールいつもありがとにゃ。合計 \(totalPrice)円にゃ。")
+                })
+                
+                Spacer()
+            }
+            .padding()
         }
-        .padding()
+    }
+    
+    private func fetchAIReplyText(for prompt: String) async -> String {
+        let fullPrompt = "\(prompt)"
+        #if DEBUG
+        let baseURL = "http://localhost:8787"
+        #else
+        let baseURL = "https://my-worker.app-lab-nanato.workers.dev"
+        #endif
+        
+        guard let url = URL(string: baseURL) else { return "URL無効にゃ" }
+        
+        let body: [String: Any] = ["prompt": fullPrompt]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: body)
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = data
+            
+            let (responseData, _) = try await URLSession.shared.data(for: request)
+            if let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+               let reply = json["reply"] as? String {
+                return reply
+            } else {
+                return "返答形式が不正にゃ"
+            }
+        } catch {
+            return "サーバに接続できないにゃ: \(error.localizedDescription)"
+        }
     }
 }
+
+    // --- 非同期 AI 呼び出し（ContentView と共通関数を流用） ---
+    private func fetchAIReplyText(for prompt: String) async -> String {
+        let fullPrompt = "\(prompt)"
+        #if DEBUG
+        let baseURL = "http://localhost:8787"
+        #else
+        let baseURL = "https://my-worker.app-lab-nanato.workers.dev"
+        #endif
+        
+        guard let url = URL(string: baseURL) else { return "URL無効にゃ" }
+        
+        let body: [String: Any] = ["prompt": fullPrompt]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: body)
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = data
+            
+            let (responseData, _) = try await URLSession.shared.data(for: request)
+            if let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+               let reply = json["reply"] as? String {
+                return reply
+            } else {
+                return "返答形式が不正にゃ"
+            }
+        } catch {
+            return "サーバに接続できないにゃ: \(error.localizedDescription)"
+        }
+    }
 
 
 // MARK: - 初回起動管理

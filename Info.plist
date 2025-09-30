@@ -1,0 +1,7 @@
+{
+	"Privacy -  photo library Usage Description" = "\"\U732b\U306e\U5199\U771f\U3092\U9078\U3076\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Photo Library Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U9078\U3076\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Camera Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U64ae\U308b\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Photo Library Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U9078\U3076\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\n";
+	"NSMicrophoneUsageDescription" = "\U97f3\U58f0\U5165\U529b\U3092\U89e3\U6790\U3059\U308b\U305f\U3081\U306b\U30de\U30a4\U30af\U3092\U4f7f\U7528\U3057\U307e\U3059";
+	"App Transport Security Settings" = { "NSAllowsArbitraryLoads" = YES;};
+   
+	"Privacy - Camera Usage Description " = "\"\U732b\U306e\U5199\U771f\U3092\U64ae\U308b\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Photo Library Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U9078\U3076\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Camera Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U64ae\U308b\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\nPrivacy - Photo Library Usage Description \U2192 \"\U732b\U306e\U5199\U771f\U3092\U9078\U3076\U305f\U3081\U306b\U4f7f\U7528\U3057\U307e\U3059\"\n";
+}

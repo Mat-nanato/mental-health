@@ -948,7 +948,10 @@ struct ContentView: View {
     
     // --- 癒しモード UI ---
     private var healingModeUI: some View {
-        ZStack {
+        // 最新ひとつ前の画像を取得
+        let secondLatestImage = photos.count >= 2 ? photos[photos.count - 2].image : photos.last?.image
+
+        return ZStack {
             // 背景写真
             if let wallpaper = iconImage {
                 Image(uiImage: wallpaper)
@@ -982,10 +985,9 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 Spacer() // 下部に押し出す
                 
-                // 吹き出し
                 VStack(spacing: 12) {
                     ForEach(submittedMessages, id: \.self) { msg in
-                        HStack {
+                        HStack(alignment: .top) {
                             if msg.starts(with: "user:") {
                                 Spacer()
                                 Text(msg.replacingOccurrences(of: "user:", with: ""))
@@ -995,18 +997,30 @@ struct ContentView: View {
                                     .cornerRadius(16)
                                     .shadow(radius: 2)
                             } else {
+                                // AI の吹き出しにアイコンを追加
+                                if let icon = secondLatestImage ?? iconImage {
+                                    Image(uiImage: icon)
+                                        .resizable()
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                        .shadow(radius: 2)
+                                        .padding(.leading, 4)
+                                }
+
                                 Text(msg.replacingOccurrences(of: "ai:", with: ""))
                                     .padding(10)
                                     .background(Color.pink.opacity(0.7))
                                     .foregroundColor(.white)
                                     .cornerRadius(16)
                                     .shadow(radius: 2)
+                                
                                 Spacer()
                             }
                         }
                     }
                 }
-                
+                        
                 // チューるあげる UI
                 HStack(spacing: 8) {
                     VStack(spacing: 4) {

@@ -35,7 +35,7 @@ struct MentalHealthApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var subscriptionManager = SubscriptionManager()
     @StateObject private var userInfo = UserInfo()   // ← ここで作成
-    
+    @State private var processedImage: UIImage? = nil
     @State private var isUserInfoEntered = false
     @State private var showHealingMode = false
     
@@ -78,8 +78,9 @@ struct MentalHealthApp: App {
                     .environmentObject(subscriptionManager)
                     .environmentObject(userInfo)
             } else if !isUserInfoEntered {
-                UserInfoView(isPresented: $isUserInfoEntered)
+                UserInfoView(processedImage: $processedImage, isPresented: $isUserInfoEntered)
                     .environmentObject(userInfo)
+
             } else {
                 ZStack {
                     ContentView(

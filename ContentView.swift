@@ -72,20 +72,23 @@ class UserInfo: ObservableObject {
 
 // MARK: - ユーザー情報入力画面（かわいいフォント版 + キーボード対応）
 struct UserInfoView: View {
+    @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var userImage: UIImage? = nil
+    @Binding var processedImage: UIImage?   // ← Binding になっていること！
     @EnvironmentObject var userInfo: UserInfo
     @Binding var isPresented: Bool
-
+    
     let genders = ["男性", "女性", "その他"]
     let alcoholOptions = ["なし", "あり"]
     let tobaccoOptions = ["なし", "あり"]
-
+    
     // キーボードフォーカス管理
     @FocusState private var focusedField: Field?
-
+    
     enum Field: Hashable {
         case catName1, catName2, age, address, height, weight
     }
-
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -96,7 +99,7 @@ struct UserInfoView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-
+                
                 GeometryReader { geo in
                     ForEach(0..<50, id: \.self) { _ in
                         Circle()
@@ -108,114 +111,208 @@ struct UserInfoView: View {
                             )
                     }
                 }
-
+                
                 Form {
                     Section(header: Text("お猫様の情報")
-                                .font(.custom("ChalkboardSE-Bold", size: 20))
-                                .foregroundColor(.pink)) {
-
-                        // 呼んでほしい名前
-                        TextField("お猫様に読んでほしい名前", text: $userInfo.catCallName)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .padding(.vertical, 5)
-                            .focused($focusedField, equals: .catName1)
-
-                        // 猫の名前
-                        TextField("お猫様の名前", text: $userInfo.catRealName)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .padding(.vertical, 5)
-                            .focused($focusedField, equals: .catName2)
-                    }
-
+                        .font(.custom("ChalkboardSE-Bold", size: 20))
+                        .foregroundColor(.pink)) {
+                            
+                            // 呼んでほしい名前
+                            TextField("お猫様に読んでほしい名前", text: $userInfo.catCallName)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .padding(.vertical, 5)
+                                .focused($focusedField, equals: .catName1)
+                            
+                            // 猫の名前
+                            TextField("お猫様の名前", text: $userInfo.catRealName)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .padding(.vertical, 5)
+                                .focused($focusedField, equals: .catName2)
+                        }
+                    
                     Section(header: Text("ユーザープロフィール")
-                                .font(.custom("ChalkboardSE-Bold", size: 20))
-                                .foregroundColor(.pink)) {
-                        Picker("性別", selection: $userInfo.gender) {
-                            ForEach(genders, id: \.self) { gender in
-                                Text(gender)
-                                    .font(.custom("ChalkboardSE-Regular", size: 18))
-                                    .tag(gender) // ← tag を明示
+                        .font(.custom("ChalkboardSE-Bold", size: 20))
+                        .foregroundColor(.pink)) {
+                            Picker("性別", selection: $userInfo.gender) {
+                                ForEach(genders, id: \.self) { gender in
+                                    Text(gender)
+                                        .font(.custom("ChalkboardSE-Regular", size: 18))
+                                        .tag(gender) // ← tag を明示
+                                }
                             }
-                        }
-                        .onAppear {
-                            if !genders.contains(userInfo.gender) || userInfo.gender.isEmpty {
-                                userInfo.gender = genders.first ?? "男性"
+                            .onAppear {
+                                if !genders.contains(userInfo.gender) || userInfo.gender.isEmpty {
+                                    userInfo.gender = genders.first ?? "男性"
+                                }
                             }
+                            
+                            TextField("年齢", text: $userInfo.age)
+                                .keyboardType(.numberPad)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .focused($focusedField, equals: .age)
+                            TextField("住所（市区町村）", text: $userInfo.address)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .focused($focusedField, equals: .address)
+                            TextField("身長 (cm)", text: $userInfo.height)
+                                .keyboardType(.decimalPad)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .focused($focusedField, equals: .height)
+                            TextField("体重 (kg)", text: $userInfo.weight)
+                                .keyboardType(.decimalPad)
+                                .font(.custom("ChalkboardSE-Regular", size: 18))
+                                .focused($focusedField, equals: .weight)
                         }
-
-                        TextField("年齢", text: $userInfo.age)
-                            .keyboardType(.numberPad)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .focused($focusedField, equals: .age)
-                        TextField("住所（市区町村）", text: $userInfo.address)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .focused($focusedField, equals: .address)
-                        TextField("身長 (cm)", text: $userInfo.height)
-                            .keyboardType(.decimalPad)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .focused($focusedField, equals: .height)
-                        TextField("体重 (kg)", text: $userInfo.weight)
-                            .keyboardType(.decimalPad)
-                            .font(.custom("ChalkboardSE-Regular", size: 18))
-                            .focused($focusedField, equals: .weight)
-                    }
-
+                    
                     Section(header: Text("生活習慣")
-                                .font(.custom("ChalkboardSE-Bold", size: 20))
-                                .foregroundColor(.pink)) {
-                        Picker("飲酒", selection: $userInfo.alcohol) {
-                            ForEach(alcoholOptions, id: \.self) { option in
-                                Text(option)
-                                    .font(.custom("ChalkboardSE-Regular", size: 18))
-                                    .tag(option) // ← tag を明示
+                        .font(.custom("ChalkboardSE-Bold", size: 20))
+                        .foregroundColor(.pink)) {
+                            Picker("飲酒", selection: $userInfo.alcohol) {
+                                ForEach(alcoholOptions, id: \.self) { option in
+                                    Text(option)
+                                        .font(.custom("ChalkboardSE-Regular", size: 18))
+                                        .tag(option) // ← tag を明示
+                                }
+                            }
+                            .onAppear {
+                                if !alcoholOptions.contains(userInfo.alcohol) || userInfo.alcohol.isEmpty {
+                                    userInfo.alcohol = alcoholOptions.first ?? "なし"
+                                }
+                            }
+                            
+                            Picker("喫煙", selection: $userInfo.tobacco) {
+                                ForEach(tobaccoOptions, id: \.self) { option in
+                                    Text(option)
+                                        .font(.custom("ChalkboardSE-Regular", size: 18))
+                                        .tag(option) // ← tag を明示
+                                }
+                            }
+                            .onAppear {
+                                if !tobaccoOptions.contains(userInfo.tobacco) || userInfo.tobacco.isEmpty {
+                                    userInfo.tobacco = tobaccoOptions.first ?? "なし"
+                                }
                             }
                         }
-                        .onAppear {
-                            if !alcoholOptions.contains(userInfo.alcohol) || userInfo.alcohol.isEmpty {
-                                userInfo.alcohol = alcoholOptions.first ?? "なし"
-                            }
-                        }
-
-                        Picker("喫煙", selection: $userInfo.tobacco) {
-                            ForEach(tobaccoOptions, id: \.self) { option in
-                                Text(option)
-                                    .font(.custom("ChalkboardSE-Regular", size: 18))
-                                    .tag(option) // ← tag を明示
-                            }
-                        }
-                        .onAppear {
-                            if !tobaccoOptions.contains(userInfo.tobacco) || userInfo.tobacco.isEmpty {
-                                userInfo.tobacco = tobaccoOptions.first ?? "なし"
-                            }
-                        }
-                    }
-
+                    
                     Section {
                         Button("次へ") { isPresented = true }
                             .buttonStyle(.borderedProminent)
                             .font(.custom("ChalkboardSE-Bold", size: 20))
                             .tint(.pink)
                     }
+                    
+                    // 👇この位置に追加（ここが「Form の最後」）
+                    Section(header: Text("ユーザー画像")
+                        .font(.custom("ChalkboardSE-Bold", size: 20))
+                        .foregroundColor(.pink)) {
+                            
+                            if let processedImage = processedImage {
+                                Image(uiImage: processedImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: 200)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .padding(.vertical, 8)
+                            } else {
+                                Text("画像未選択").foregroundColor(.gray)
+                            }
+                            
+                            PhotosPicker(selection: $selectedItem, matching: .images) {
+                                Label("ユーザー写真を選ぶ", systemImage: "photo.on.rectangle")
+                            }
+                            
+                            Button("😺 猫化する") {
+                                if let userImage = userImage {
+                                    detectFaceAndAddCatParts(to: userImage)
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.pink)
+                        }
                 }
-                .scrollContentBackground(.hidden)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("ユーザー情報入力")
-                        .font(.custom("ChalkboardSE-Bold", size: 22))
-                        .foregroundColor(.pink)
-                }
+            .scrollContentBackground(.hidden)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("ユーザー情報入力")
+                    .font(.custom("ChalkboardSE-Bold", size: 22))
+                    .foregroundColor(.pink)
             }
-            // キーボード出すための初期フォーカス
-            .onAppear {
-                print("UserInfoView が描画されたにゃ！") // ← ここでログ
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    focusedField = .catName1
+        }
+        // キーボード出すための初期フォーカス
+        .onAppear {
+            print("UserInfoView が描画されたにゃ！") // ← ここでログ
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                focusedField = .catName1
+            }
+        }
+        .onChange(of: selectedItem) { newValue, _ in
+            Task {
+                if let data = try? await newValue?.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    userImage = uiImage
+                    processedImage = uiImage
                 }
             }
         }
+
+    }
+    
+    func addCatParts(to image: UIImage, face: VNFaceObservation) -> UIImage {
+        let size = image.size
+        
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        image.draw(in: CGRect(origin: .zero, size: size))
+        
+        // 顔位置をUIKit座標に変換
+        let boundingBox = face.boundingBox
+        let faceRect = CGRect(
+            x: boundingBox.origin.x * size.width,
+            y: (1 - boundingBox.origin.y - boundingBox.height) * size.height,
+            width: boundingBox.width * size.width,
+            height: boundingBox.height * size.height
+        )
+        
+        // 猫耳とヒゲ（Assetsに cat_ears.png, cat_whiskers.png を用意）
+        if let ears = UIImage(named: "cat_ears") {
+            let earWidth = faceRect.width * 1.5
+            let earHeight = earWidth * (ears.size.height / ears.size.width)
+            let earX = faceRect.midX - earWidth / 2
+            let earY = faceRect.minY - earHeight * 0.8
+            ears.draw(in: CGRect(x: earX, y: earY, width: earWidth, height: earHeight))
+        }
+        
+        if let whiskers = UIImage(named: "cat_whiskers") {
+            let whiskerWidth = faceRect.width * 1.3
+            let whiskerHeight = whiskerWidth * (whiskers.size.height / whiskers.size.width)
+            let whiskerX = faceRect.midX - whiskerWidth / 2
+            let whiskerY = faceRect.midY + faceRect.height * 0.1
+            whiskers.draw(in: CGRect(x: whiskerX, y: whiskerY, width: whiskerWidth, height: whiskerHeight))
+        }
+        
+        let result = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        
+        return result ?? image
+    }
+    func detectFaceAndAddCatParts(to image: UIImage) {
+        guard let ciImage = CIImage(image: image) else { return }
+        
+        let request = VNDetectFaceRectanglesRequest { request, error in
+            guard let results = request.results as? [VNFaceObservation], let firstFace = results.first else {
+                print("顔が検出されなかったにゃ…")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                processedImage = addCatParts(to: image, face: firstFace)
+            }
+        }
+        
+        let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
+        try? handler.perform([request])
     }
 }
 
@@ -407,16 +504,16 @@ struct CatTalkView: View {
                 messageHStack(icon: icon, text: encouragementMessage(for: score))
             }
             if showWeatherMessage, let icon = icon {
-                messageHStack(icon: icon, text: "今日は\(day)、天気は\(weather)だにゃ")
+                messageHStack(icon: icon, text: "今日は\(day)、天気は\(weather)")
             }
             if showGreetingMessage, let icon = icon {
-                messageHStack(icon: icon, text: "じゃあ\(catName)の今日の点数を発表するにゃ")
+                messageHStack(icon: icon, text: "じゃあ\(catName)の今日の点数を発表するにゃ。")
             }
             if showFinalScoreMessage, let icon = icon {
-                messageHStack(icon: icon, text: "\(catName)の今日の気分は多分\(score)点くらいだにゃ")
+                messageHStack(icon: icon, text: "\(catName)の今日の気分は多分\(score)点くらいだにゃ。")
             }
             if showNextDayMessage, let icon = icon {
-                messageHStack(icon: icon, text: "チューる後 \(userInfo.churuCount) 個にゃ")
+                messageHStack(icon: icon, text: "チューる後 \(userInfo.churuCount) 個にゃ。")
             }
         }
         .padding(.bottom, 50)
@@ -465,8 +562,8 @@ struct CatTalkView: View {
         switch score {
         case 0..<40: return "今日は休んで病院行くにゃ！！"
         case 40..<60: return "無理せず、少しずつがんばろうにゃ？"
-        case 60..<80: return "いい調子だにゃ！これをキープにゃ"
-        default: return "絶好調にゃ！猫缶買ってくるにゃ"
+        case 60..<80: return "いい調子だにゃ！これをキープにゃ。"
+        default: return "絶好調にゃ！猫缶買ってくるにゃ。"
         }
     }
 }
@@ -794,6 +891,7 @@ struct ContentView: View {
     @State private var isInputVisible: Bool = false
     @State private var photos: [PhotoListView.PhotoItem] = []
     @State private var aiReply: String = ""  // ここに追加
+    @State private var processedImage: UIImage? = nil
     // 選んだだけの画像を保持（保存はまだ）
     @State private var pendingImage: UIImage?
     // --- AI 関連 ---
@@ -984,43 +1082,85 @@ struct ContentView: View {
             // 下部固定コンテナ
             VStack(spacing: 12) {
                 Spacer() // 下部に押し出す
-                
-                VStack(spacing: 12) {
-                    ForEach(submittedMessages, id: \.self) { msg in
-                        HStack(alignment: .top) {
-                            if msg.starts(with: "user:") {
-                                Spacer()
-                                Text(msg.replacingOccurrences(of: "user:", with: ""))
-                                    .padding(10)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(16)
-                                    .shadow(radius: 2)
-                            } else {
-                                // AI の吹き出しにアイコンを追加
-                                if let icon = secondLatestImage ?? iconImage {
-                                    Image(uiImage: icon)
-                                        .resizable()
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                        .shadow(radius: 2)
-                                        .padding(.leading, 4)
-                                }
 
-                                Text(msg.replacingOccurrences(of: "ai:", with: ""))
-                                    .padding(10)
-                                    .background(Color.pink.opacity(0.7))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(16)
+                VStack(spacing: 12) {
+                    // --- 2回目以降のユーザー吹き出し（最初の吹き出しの上に積む） ---
+                    let firstUserIndex = submittedMessages.firstIndex(where: { $0.starts(with: "user:") })
+                    let restUserMsgs = submittedMessages.enumerated()
+                        .filter { index, msg in
+                            msg.starts(with: "user:") && index != firstUserIndex
+                        }
+                        .map { $0.element }
+                    
+                    ForEach(restUserMsgs.reversed(), id: \.self) { msg in
+                        HStack(alignment: .top) {
+                            Spacer()
+                            Text(msg.replacingOccurrences(of: "user:", with: ""))
+                                .padding(10)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(16)
+                                .shadow(radius: 2)
+                        }
+                    }
+
+                    // --- 最初のユーザー吹き出し + 人物アイコン ---
+                    if let firstUserMsg = submittedMessages.first(where: { $0.starts(with: "user:") }) {
+                        HStack(alignment: .top) {
+                            Spacer()
+                            Text(firstUserMsg.replacingOccurrences(of: "user:", with: ""))
+                                .padding(10)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(16)
+                                .shadow(radius: 2)
+                        }
+                        
+                        HStack {
+                            Spacer()
+                            if let processedImage = processedImage {
+                                Image(uiImage: processedImage)
+                                    .resizable()
+                                    .frame(width: 50, height: 50)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.purple, lineWidth: 2))
                                     .shadow(radius: 2)
-                                
-                                Spacer()
+                                    .padding(.trailing, 4)
+                            } else {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .resizable()
+                                    .frame(width: 50, height: 50)
+                                    .foregroundColor(.purple)
+                                    .padding(.trailing, 4)
                             }
                         }
                     }
+                    // --- AI吹き出し（順序そのまま） ---
+                    let aiMsgs = submittedMessages.filter { $0.starts(with: "ai:") }
+                    ForEach(aiMsgs, id: \.self) { msg in
+                        HStack(alignment: .top) {
+                            if let icon = secondLatestImage ?? iconImage {
+                                Image(uiImage: icon)
+                                    .resizable()
+                                    .frame(width: 50, height: 50)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                    .shadow(radius: 2)
+                                    .padding(.leading, 4)
+                            }
+
+                            Text(msg.replacingOccurrences(of: "ai:", with: ""))
+                                .padding(10)
+                                .background(Color.pink.opacity(0.7))
+                                .foregroundColor(.white)
+                                .cornerRadius(16)
+                                .shadow(radius: 2)
+
+                            Spacer()
+                        }
+                    }
                 }
-                        
+                  
                 // チューるあげる UI
                 HStack(spacing: 8) {
                     VStack(spacing: 4) {

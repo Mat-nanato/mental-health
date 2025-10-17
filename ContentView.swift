@@ -1030,7 +1030,7 @@ struct ContentView: View {
             
             
             
-            // ここでまとめる
+            // 既存の猫トーク表示
             if let icon = iconImage {
                 CatTalkView(
                     icon: icon,
@@ -1041,6 +1041,8 @@ struct ContentView: View {
                     userInfo: userInfo
                 )
             }
+
+
         }
     }
     
@@ -1453,8 +1455,9 @@ struct ContentView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        NavigationLink(destination: PurchaseChuruView()
-                            .environmentObject(userInfo)) { // ← ここ追加
+                        NavigationLink(destination: PurchaseChuruView(catIcon: iconImage)
+                                       // ← ここで猫アイコン渡す
+                            .environmentObject(userInfo)     ) { // ← ここ追加
                                 VStack(spacing: 4) {
                                     Image(systemName: "fork.knife")
                                         .resizable()

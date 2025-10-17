@@ -2,7 +2,8 @@
 import SwiftUI
 import Foundation
 import StoreKit
-
+import Charts
+import HealthKit
 
 // MARK: - 言語管理
 enum AppLanguage: String, CaseIterable {
@@ -18,15 +19,18 @@ struct PurchaseChuruView: View {
     @EnvironmentObject var userInfo: UserInfo
     @State private var quantity: Int = 1
     let pricePerUnit = 100
-    
+    @StateObject var subscriptionManager = SubscriptionManager()
     @State private var showAlert = false
     @State private var purchaseAIMessage = "にゃん診断中…"
-
+    @State private var stepsToday: Int = 6200
+      let goalSteps: Int = 10000
+    let catIcon: UIImage?
     var totalPrice: Int {
         quantity * pricePerUnit
     }
     
     var body: some View {
+
         ZStack {
             LinearGradient(
                 colors: [Color.pink.opacity(0.3),
@@ -41,13 +45,13 @@ struct PurchaseChuruView: View {
                 Text("チューるを購入")
                     .font(.title)
                     .bold()
-                
+                    .frame(maxWidth: .infinity) // ← フル幅に
                 Stepper("個数: \(quantity)", value: $quantity, in: 1...99)
                     .padding()
-                
+                    .frame(maxWidth: .infinity) // ← フル幅に
                 Text("合計金額: \(totalPrice)円")
                     .font(.headline)
-                
+                    .frame(maxWidth: .infinity) // ← フル幅に
                 // AI応援メッセージ
                 Text(purchaseAIMessage)
                     .font(.body)
@@ -58,31 +62,25 @@ struct PurchaseChuruView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 
                 Button(action: {
-                    // チュールを増やす
                     userInfo.churuCount += quantity
                     showAlert = true
-                    
-                    // 購入ボタン押したタイミングで AI メッセージ取得
                     Task {
                         let prompt = """
                         あなたは猫キャラクターです。ユーザーがチュールを購入しました。
                         ユーザー情報:
                         呼ばれたい名前: \(userInfo.catCallName)
-                                                猫の名前: \(userInfo.catRealName)
-                                                性別: \(userInfo.gender)
-                                                年齢: \(userInfo.age)
-                                                身長: \(userInfo.height)
-                                                体重: \(userInfo.weight)
-                                                住所: \(userInfo.address)
-                                                アルコール: \(userInfo.alcohol)
-                                                タバコ: \(userInfo.tobacco)
-                        
+                        猫の名前: \(userInfo.catRealName)
+                        性別: \(userInfo.gender)
+                        年齢: \(userInfo.age)
+                        身長: \(userInfo.height)
+                        体重: \(userInfo.weight)
+                        住所: \(userInfo.address)
+                        アルコール: \(userInfo.alcohol)
+                        タバコ: \(userInfo.tobacco)
                         これらを踏まえて、短く可愛く、元気づける応援メッセージを出してください。
                         """
                         purchaseAIMessage = await fetchAIReplyText(for: prompt)
                     }
-
-                    
                 }) {
                     Text("購入する")
                         .foregroundColor(.white)
@@ -91,49 +89,31 @@ struct PurchaseChuruView: View {
                         .background(Color.blue)
                         .cornerRadius(12)
                 }
-                .padding(.horizontal)
+               
                 .alert("購入完了", isPresented: $showAlert, actions: {
                     Button("OK", role: .cancel) { }
                 }, message: {
                     Text("\(quantity)個のチュールいつもありがとにゃ。合計 \(totalPrice)円にゃ。")
                 })
-                
-                Spacer()
+
+                // --- 歩数吹き出し + 棒グラフ追加 ---
+                Group {
+                    if let icon = catIcon {
+                        CatTalkViewForSteps(
+                            icon: icon,
+                            steps: stepsToday,
+                            goal: goalSteps,
+                            userInfo: userInfo,
+                            subscriptionManager: subscriptionManager
+                        )
+                    }
+                }
+                }
+                Spacer(minLength: 0) // 必要最小限のスペースだけ
             }
-            .padding()
+           
         }
     }
-    
-    private func fetchAIReplyText(for prompt: String) async -> String {
-        let fullPrompt = "\(prompt)"
-        #if DEBUG
-        let baseURL = "http://localhost:8787"
-        #else
-        let baseURL = "https://my-worker.app-lab-nanato.workers.dev"
-        #endif
-        
-        guard let url = URL(string: baseURL) else { return "URL無効にゃ" }
-        
-        let body: [String: Any] = ["prompt": fullPrompt]
-        do {
-            let data = try JSONSerialization.data(withJSONObject: body)
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = data
-            
-            let (responseData, _) = try await URLSession.shared.data(for: request)
-            if let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-               let reply = json["reply"] as? String {
-                return reply
-            } else {
-                return "返答形式が不正にゃ"
-            }
-        } catch {
-            return "サーバに接続できないにゃ: \(error.localizedDescription)"
-        }
-    }
-}
 
     // --- 非同期 AI 呼び出し（ContentView と共通関数を流用） ---
     private func fetchAIReplyText(for prompt: String) async -> String {
@@ -183,18 +163,44 @@ class AppState: ObservableObject {
 }
 
 
-/// MARK: - 課金管理 + 無料トライアル
+/// MARK: - 課金管理 + 無料トライアル + 歩数監視
 @MainActor
 class SubscriptionManager: ObservableObject {
     @Published var hasActiveSubscription: Bool = false
     @Published var subscriptionStatusMessage: String = ""
     @Published var subscriptionStartDate: Date?
+    @Published var stepsToday: Int = 0
+    @Published var dailySteps: [DailyStep] = []
 
+    private let healthStore = HKHealthStore()
+    private var lastRewardDate: Date?
+    let goalSteps = 10000
     let productId = "com.example.mentalhealth.monthly"
+
+    struct DailyStep: Identifiable {
+        let id = UUID()
+        let date: Date
+        let steps: Int
+    }
 
     init() {
         print("🔹 SubscriptionManager init start")
 
+        // --- 月曜始まりの7日分を初期化 ---
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2 // 月曜始まり
+
+        let today = Date()
+        let weekday = calendar.component(.weekday, from: today)
+        let daysFromMonday = (weekday + 5) % 7 // 0 = 月曜
+        let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: calendar.startOfDay(for: today))!
+
+        self.dailySteps = (0..<7).map { offset in
+            let date = calendar.date(byAdding: .day, value: offset, to: monday)!
+            return DailyStep(date: date, steps: 0)
+        }
+
+        // 保存された課金開始日があれば取得
         if let savedDate = UserDefaults.standard.object(forKey: "subscriptionStartDate") as? Date {
             subscriptionStartDate = savedDate
             print("🔹 課金開始日 savedDate が見つかった: \(savedDate)")
@@ -202,10 +208,110 @@ class SubscriptionManager: ObservableObject {
             print("🔹 課金開始日 savedDate はなし")
         }
 
+        // 保存された報酬日があれば取得
+        if let rewardDate = UserDefaults.standard.object(forKey: "lastRewardDate") as? Date {
+            lastRewardDate = rewardDate
+        }
+
+        requestHealthAuthorization()
         print("🔹 SubscriptionManager init end")
     }
 
-    /// 購入処理（UserInfo に直接反映）
+    // MARK: - HealthKit 歩数処理
+    private func requestHealthAuthorization() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        healthStore.requestAuthorization(toShare: [], read: [stepType]) { success, error in
+            if success {
+                Task { @MainActor in
+                    self.startStepMonitoring()
+                }
+            } else {
+                print("⚠️ HealthKit authorization failed: \(error?.localizedDescription ?? "")")
+            }
+        }
+    }
+
+    private func startStepMonitoring() {
+        fetchTodaySteps()
+        fetchWeeklySteps()
+
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, _, _ in
+            Task { @MainActor in
+                self?.fetchTodaySteps()
+                self?.fetchWeeklySteps()
+            }
+        }
+        healthStore.execute(query)
+        healthStore.enableBackgroundDelivery(for: stepType, frequency: .immediate) { _, _ in }
+    }
+
+
+    private func fetchTodaySteps() {
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
+
+        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { [weak self] _, result, _ in
+            guard let self = self else { return }
+            let total = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+            DispatchQueue.main.async {
+                self.stepsToday = Int(total)
+                self.checkForReward()
+            }
+        }
+        healthStore.execute(query)
+    }
+    private func fetchWeeklySteps() {
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+        let calendar = Calendar.current
+        let now = Date()
+        guard let startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) else { return }
+
+        var interval = DateComponents()
+        interval.day = 1
+
+        let query = HKStatisticsCollectionQuery(
+            quantityType: stepType,
+            quantitySamplePredicate: nil,
+            options: .cumulativeSum,
+            anchorDate: startDate,
+            intervalComponents: interval
+        )
+
+        query.initialResultsHandler = { [weak self] _, results, _ in
+            guard let self = self else { return }
+            var newSteps: [DailyStep] = []
+
+            results?.enumerateStatistics(from: startDate, to: now) { stats, _ in
+                let steps = stats.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                newSteps.append(DailyStep(date: stats.startDate, steps: Int(steps)))
+            }
+
+            DispatchQueue.main.async {
+                self.dailySteps = newSteps
+            }
+        }
+
+        healthStore.execute(query)
+    }
+
+    private func checkForReward() {
+        let today = Calendar.current.startOfDay(for: Date())
+        if let last = lastRewardDate, Calendar.current.isDate(last, inSameDayAs: today) {
+            return
+        }
+
+        if stepsToday >= goalSteps {
+            print("🎉 歩数目標達成！チュール +1")
+            NotificationCenter.default.post(name: .didEarnChuru, object: nil)
+            lastRewardDate = today
+            UserDefaults.standard.set(today, forKey: "lastRewardDate")
+        }
+    }
+
+    // MARK: - 課金管理
     func purchase(userInfo: UserInfo) async {
         do {
             let storeProducts = try await Product.products(for: [productId])
@@ -219,7 +325,6 @@ class SubscriptionManager: ObservableObject {
                 let purchaseDate = transaction.purchaseDate
 
                 if subscriptionStartDate == nil {
-                    // 初回購入で7個付与
                     userInfo.addChuru(99)
                     subscriptionStartDate = purchaseDate
                     UserDefaults.standard.set(purchaseDate, forKey: "subscriptionStartDate")
@@ -257,8 +362,7 @@ class SubscriptionManager: ObservableObject {
                     subscriptionStartDate = transaction.purchaseDate
                     hasActiveSubscription = transaction.revocationDate == nil
                     updateSubscriptionStatus()
-                    
-                    // 必要ならチュール付与などをここで userInfo に反映
+
                     let trialPeriodDays = 7
                     let now = Date()
                     if let start = subscriptionStartDate {
@@ -273,7 +377,6 @@ class SubscriptionManager: ObservableObject {
             }
         }
     }
-
 
     func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
@@ -303,6 +406,125 @@ class SubscriptionManager: ObservableObject {
     }
 }
 
+// MARK: - Notification連携（チュール加算トリガー）
+extension Notification.Name {
+    static let didEarnChuru = Notification.Name("didEarnChuru")
+}
+
+// MARK: - 歩数テキスト表示
+struct CatTalkViewForSteps: View {
+    let icon: UIImage
+    let steps: Int
+    let goal: Int
+    @ObservedObject var userInfo: UserInfo
+    @ObservedObject var subscriptionManager: SubscriptionManager // ← 追加
+    @State private var showMessage = false
+
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if showMessage {
+                messageHStack(icon: icon,
+                              text: "今\(steps)歩くらい歩いたにゃ、後\(max(goal - steps, 0))歩でチューるゲットだにゃ")
+            }
+            // 📊 ここに棒グラフを追加
+            WeeklyStepsChartView(dailySteps: subscriptionManager.dailySteps)
+        }
+        .padding(.bottom, 50)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { showMessage = true }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didEarnChuru)) { _ in
+            userInfo.addChuru(1)
+        }
+    }
+
+    @ViewBuilder
+    private func messageHStack(icon: UIImage, text: String) -> some View {
+        HStack(alignment: .top) {
+            Image(uiImage: icon)
+                .resizable()
+                .frame(width: 80, height: 80)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .shadow(radius: 3)
+                .padding(.leading)
+
+            Text(text)
+                .padding(10)
+                .background(Color.white.opacity(0.9))
+                .cornerRadius(12)
+                .shadow(radius: 2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 5)
+        .transition(.opacity)
+    }
+}
+
+
+struct WeeklyStepsChartView: View {
+    let dailySteps: [SubscriptionManager.DailyStep]
+    
+    private let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "ja_JP")
+        df.dateFormat = "E" // 「月」「火」「水」などの曜日だけ表示
+        return df
+    }()
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("過去7日間の歩数")
+                .font(.headline)
+                
+            
+            Chart(dailySteps) { item in
+                BarMark(
+                    x: .value("日付", dateFormatter.string(from: item.date)),
+                    y: .value("歩数", item.steps)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.pink.opacity(0.8), Color.orange.opacity(0.6)],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                )
+                .cornerRadius(6)
+                .annotation(position: .top) {
+                    Text("\(item.steps)")
+                        .font(.caption2)
+                        .foregroundColor(.purple)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 200) // ← 横幅いっぱい
+            
+            .chartYAxis {
+                AxisMarks(position: .leading)
+            }
+            .chartXAxis {
+                AxisMarks(values: dailySteps.map { dateFormatter.string(from: $0.date) }) { value in
+                    AxisValueLabel {
+                        if let day = value.as(String.self) {
+                            Text(day)
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.pink)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.bottom)
+    }
+
+}
     // MARK: - 利用規約テキスト
     struct TermsOfServiceText {
         static let japanese: String = """
@@ -607,4 +829,3 @@ struct SettingsView: View {
             }
         }
     }
-
